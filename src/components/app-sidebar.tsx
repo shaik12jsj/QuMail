@@ -9,7 +9,15 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { Inbox, Send, FileText, Star, Trash2 } from 'lucide-react';
+import {
+  Inbox,
+  Send,
+  FileText,
+  Star,
+  Trash2,
+  User,
+  Settings,
+} from 'lucide-react';
 
 const menuItems = [
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
@@ -26,7 +34,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarContent>
         <SidebarMenu>
-          {menuItems.map(item => (
+          {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton asChild isActive={pathname === item.href}>
                 <Link href={item.href}>
@@ -41,3 +49,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+

@@ -1,92 +1,64 @@
-'use client';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
+"use client";
+
+import { useAuth } from "@/hooks/useAuth";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useToast } from "@/hooks/use-toast"
-import { CreditCard, LogOut, PlusCircle, Settings, User } from "lucide-react"
-import Link from "next/link"
-import placeholderImages from '@/lib/placeholder-images.json';
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
-export function UserNav() {
-  const { toast } = useToast();
-  const userAvatar = placeholderImages.placeholderImages.find(img => img.id === 'user-avatar-1');
+export default function UserNav() {
+  const { user, logout } = useAuth();
 
-  const handleSignOut = () => {
-    toast({
-        title: "Signed Out",
-        description: "You have been successfully signed out.",
-    });
-  };
+  if (!user) {
+    return (
+      <Button asChild>
+        <a href="/login">Login</a>
+      </Button>
+    );
+  }
 
-  const handleNewTeam = () => {
-    toast({
-        title: "New Team Created",
-        description: "A new team has been created successfully.",
-    });
-  };
-  
+  // Get user's first letter for avatar circle
+  const firstLetter = user.displayName
+    ? user.displayName.charAt(0).toUpperCase()
+    : user.email
+    ? user.email.charAt(0).toUpperCase()
+    : "?";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10">
-            {userAvatar ? (
-              <AvatarImage src={userAvatar.imageUrl} alt={userAvatar.description} data-ai-hint={userAvatar.imageHint} />
-            ) : (
-              <AvatarImage src="https://picsum.photos/seed/1/100/100" alt="User Avatar" data-ai-hint="person portrait" />
-            )}
-            <AvatarFallback>AV</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Alexei Volkov</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              alexei.volkov@qumail.com
-            </p>
+        <button className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-accent transition">
+          {/* Avatar Circle */}
+          <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+            {firstLetter}
           </div>
+
+          {/* Name or Email */}
+          <span className="font-medium text-sm">
+            {user.displayName || user.email}
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel className="text-center font-semibold">
+          {user.displayName || user.email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <Link href="/profile">
-                <User className="mr-2" />
-                <span>Profile</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/billing">
-                <CreditCard className="mr-2" />
-                <span>Billing</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/settings">
-                <Settings className="mr-2" />
-                <span>Settings</span>
-            </Link>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleNewTeam}>
-            <PlusCircle className="mr-2" />
-            <span>New Team</span>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut}>
-          <LogOut className="mr-2" />
-          <span>Log out</span>
+        <DropdownMenuItem asChild>
+          <a href="/profile">Profile</a>
         </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/settings">Settings</a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }

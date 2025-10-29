@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { UserNav } from '@/components/user-nav';
+import UserNav from '@/components/user-nav';
 import { Edit, Mail } from 'lucide-react';
 
 export function AppHeader() {

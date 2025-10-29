@@ -1,39 +1,26 @@
-'use client';
-
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/app-sidebar';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { AppHeader } from '@/components/app-header';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+"use client";
+import { useEffect, useState } from "react";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppHeader } from "@/components/app-header";
+import { Button } from "@/components/ui/button";
 
 export default function SettingsPage() {
-  const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const [theme, setTheme] = useState("light");
 
   useEffect(() => {
-    setMounted(true);
+    const saved = localStorage.getItem("theme");
+    if (saved) setTheme(saved);
+    document.documentElement.classList.toggle("dark", saved === "dark");
   }, []);
 
-  if (!mounted) {
-    return null;
-  }
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
 
   return (
     <SidebarProvider>
@@ -49,78 +36,18 @@ export default function SettingsPage() {
                     Settings
                   </h2>
                   <p className="text-muted-foreground">
-                    Manage your application and notification settings.
+                    Manage appearance and preferences.
                   </p>
                 </div>
 
                 <Card>
                   <CardHeader>
                     <CardTitle>Appearance</CardTitle>
-                    <CardDescription>
-                      Customize the look and feel of your application.
-                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="theme"
-                        className="flex flex-col space-y-1"
-                      >
-                        <span>Theme</span>
-                        <span className="font-normal leading-snug text-muted-foreground">
-                          Select the theme for the application.
-                        </span>
-                      </Label>
-                      <Select
-                        value={theme}
-                        onValueChange={setTheme}
-                      >
-                        <SelectTrigger id="theme" className="w-[180px]">
-                          <SelectValue placeholder="Select theme" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="light">Light</SelectItem>
-                          <SelectItem value="dark">Dark</SelectItem>
-                          <SelectItem value="system">System</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Notifications</CardTitle>
-                    <CardDescription>
-                      Configure how you receive notifications.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="email-notifications"
-                        className="flex flex-col space-y-1"
-                      >
-                        <span>Email Notifications</span>
-                        <span className="font-normal leading-snug text-muted-foreground">
-                          Receive notifications for new emails.
-                        </span>
-                      </Label>
-                      <Switch id="email-notifications" defaultChecked />
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <Label
-                        htmlFor="desktop-notifications"
-                        className="flex flex-col space-y-1"
-                      >
-                        <span>Desktop Notifications</span>
-                        <span className="font-normal leading-snug text-muted-foreground">
-                          Show notifications on your desktop.
-                        </span>
-                      </Label>
-                      <Switch id="desktop-notifications" />
-                    </div>
+                  <CardContent>
+                    <Button onClick={toggleTheme}>
+                      Switch to {theme === "light" ? "Dark" : "Light"} Mode
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
