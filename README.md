@@ -1,6 +1,5 @@
 # 💌 Quantum Mail (QuMail)
 **Securing Tomorrow's Communication, Today**  
-_A Smart India Hackathon 2024 Project for ISRO_
 
 ![QuMail Logo](qu-mail-taupe.vercel.app)
 
