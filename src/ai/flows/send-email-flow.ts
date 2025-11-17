@@ -37,6 +37,8 @@ const sendEmailFlow = ai.defineFlow(
   async (input) => {
     // Ensure SendGrid API key is configured
     if (!process.env.SENDGRID_API_KEY) {
+      console.log("Vercel SendGrid Key:", !!process.env.SENDGRID_API_KEY, process.env.SENDGRID_ENV);
+
       console.error('SENDGRID_API_KEY is not set.');
       return { success: false, message: 'Email service is not configured. Missing API Key.' };
     }
