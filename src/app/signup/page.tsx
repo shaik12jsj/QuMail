@@ -1,8 +1,10 @@
 "use client";
+
 import { useState } from "react";
 import { auth } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { saveUserKeys } from "./signup-action"; // server action
 
 export default function SignupPage() {
   const router = useRouter();
@@ -13,9 +15,21 @@ export default function SignupPage() {
 
   const handleSignup = async (e: any) => {
     e.preventDefault();
+
     try {
+      // 1) Create Firebase user on CLIENT
       const result = await createUserWithEmailAndPassword(auth, email, password);
+
       await updateProfile(result.user, { displayName: name });
+
+      // 2) Call SERVER ACTION to store Kyber keys
+      const resp = await saveUserKeys({ name, email });
+      if (!resp.success) {
+        setError(resp.message);
+        return;
+      }
+
+      // 3) Redirect logged in user
       router.push("/");
     } catch (err: any) {
       setError(err.message);
@@ -37,6 +51,7 @@ export default function SignupPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+
         <input
           type="email"
           placeholder="Email"
@@ -44,6 +59,7 @@ export default function SignupPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+
         <input
           type="password"
           placeholder="Password"
