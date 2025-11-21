@@ -16,6 +16,8 @@ export default function ReadPage() {
   const [message, setMessage] = useState<any>(null);
   const [decrypted, setDecrypted] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
+  const [decryptedMessage, setDecryptedMessage] = useState("");
+
 
   const db = getFirestore(app);
 
@@ -54,12 +56,28 @@ export default function ReadPage() {
   }
 
   const handleDecrypt = async () => {
-    setDecrypting(true);
-    setTimeout(() => {
-      setDecrypting(false);
-      setDecrypted(true);
-    }, 1500);
-  };
+  setDecrypting(true);
+
+  try {
+    const res = await fetch("/api/decrypt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    setDecryptedMessage(data.plaintext);
+    setDecrypted(true);
+  } catch (err: any) {
+    alert("Decrypt failed: " + err.message);
+  } finally {
+    setDecrypting(false);
+  }
+};
+
+
 
   return (
     <div className="flex h-screen w-full items-center justify-center p-4">
@@ -95,8 +113,9 @@ export default function ReadPage() {
             <div className="mt-4">
               <p className="font-semibold mb-2">Decrypted Payload:</p>
               <pre className="whitespace-pre-wrap bg-gray-100 p-4 rounded">
-                {JSON.stringify(message.payload, null, 2)}
-              </pre>
+  {decryptedMessage}
+</pre>
+
             </div>
           )}
         </CardContent>
