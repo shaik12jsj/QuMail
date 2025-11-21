@@ -75,6 +75,16 @@ export async function kyberDecapsulate(kemCipherB64: string, recipientPrivB64: s
   return secret;
 }
 
+// Add these near other exports in src/lib/pqc.ts
+export function deriveAesKeyFromSecret(secret: Uint8Array) {
+  return deriveAesKey(secret);
+}
+
+// Re-export kyberDecapsulate if not already exported (you already have it)
+// export async function kyberDecapsulate(...) { ... } (you showed it earlier)
+
+
+
 // ------------------------------
 // Encrypt for recipient
 // ------------------------------

@@ -52,9 +52,10 @@ const formSchema = z.object({
   securityLevel: z.string(),
 });
 
-type Attachment = {
+type UIAttachment = {
   name: string;
   size: number;
+  file: File;
 };
 
 export function ComposeForm() {
@@ -62,7 +63,7 @@ export function ComposeForm() {
   const [securityLevelToConfirm, setSecurityLevelToConfirm] = useState('');
   const [guidance, setGuidance] = useState('');
   const [isGuidanceLoading, setIsGuidanceLoading] = useState(false);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<UIAttachment[]>([]);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -80,6 +81,20 @@ export function ComposeForm() {
 
   const recipient = form.watch('to');
   const messageContent = form.watch('body');
+
+  // Convert File → base64
+  async function fileToBase64(file: File) {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const arr = new Uint8Array(reader.result as ArrayBuffer);
+        const b64 = window.btoa(String.fromCharCode(...arr));
+        resolve(b64);
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
 
   const getGuidance = useCallback(async () => {
     if (recipient && messageContent) {
@@ -109,14 +124,24 @@ export function ComposeForm() {
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     startTransition(async () => {
+      // Convert attachments → base64
+      const encryptedAttachments = [];
+      for (const a of attachments) {
+        const contentB64 = await fileToBase64(a.file);
+        encryptedAttachments.push({
+          name: a.name,
+          size: a.size,
+          contentB64,
+        });
+      }
 
       const keyResult: GenerateSecurityKeyOutput = await generateKeyAction({
-          securityLevel: values.securityLevel,
+        securityLevel: values.securityLevel,
       });
 
       toast({
-          title: `Security Applied: ${values.securityLevel}`,
-          description: `${keyResult.description}`,
+        title: `Security Applied: ${values.securityLevel}`,
+        description: `${keyResult.description}`,
       });
 
       const result = await sendEmailAction({
@@ -125,6 +150,7 @@ export function ComposeForm() {
         body: values.body,
         securityLevel: values.securityLevel,
         securityKey: keyResult.key,
+        attachments: encryptedAttachments,   // ⬅ NEW
       });
 
       if (result.success) {
@@ -165,6 +191,7 @@ export function ComposeForm() {
       const newAttachments = files.map(file => ({
         name: file.name,
         size: file.size,
+        file,
       }));
       setAttachments(prev => [...prev, ...newAttachments]);
     }
@@ -178,6 +205,8 @@ export function ComposeForm() {
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+          {/* standard fields */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField
               control={form.control}
@@ -192,6 +221,7 @@ export function ComposeForm() {
                 </FormItem>
               )}
             />
+
             <FormField
               control={form.control}
               name="subject"
@@ -206,6 +236,7 @@ export function ComposeForm() {
               )}
             />
           </div>
+
           <FormField
             control={form.control}
             name="body"
@@ -224,51 +255,7 @@ export function ComposeForm() {
             )}
           />
 
-          <div className="space-y-4 rounded-lg border bg-secondary/50 p-4">
-            <FormField
-              control={form.control}
-              name="securityLevel"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Security Level</FormLabel>
-                  <div className="flex items-center gap-4">
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a security level" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Quantum Secure - OTP">
-                          Quantum Secure - OTP
-                        </SelectItem>
-                        <SelectItem value="Quantum-aided AES">
-                          Quantum-aided AES
-                        </SelectItem>
-                        <SelectItem value="PQC">PQC</SelectItem>
-                        <SelectItem value="No Quantum security">
-                          No Quantum security
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {isGuidanceLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Getting guidance...</span>
-              </div>
-            ) : guidance ? (
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-accent" />
-                {guidance}
-              </p>
-            ) : null}
-          </div>
-          
+          {/* Attachments */}
           <div className="space-y-2">
             <FormLabel>Attachments</FormLabel>
             <div className="flex items-center gap-2">
@@ -280,17 +267,29 @@ export function ComposeForm() {
               </Button>
               <input id="file-upload" type="file" multiple className="hidden" onChange={handleFileAttach} />
             </div>
+
             {attachments.length > 0 && (
-                <div className="mt-2 space-y-2">
-                    {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                            <span>{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
-                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveAttachment(file.name)}>
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    ))}
-                </div>
+              <div className="mt-2 space-y-2">
+                {attachments.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between rounded-md border p-2 text-sm"
+                  >
+                    <span>
+                      {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => handleRemoveAttachment(file.name)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -307,14 +306,15 @@ export function ComposeForm() {
         </form>
       </Form>
 
+
+      {/* Security Confirmation Dialog */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Security Level</AlertDialogTitle>
             <AlertDialogDescription>
-              You have selected Quantum Secure - OTP. This provides the highest
-              level of security but may be slower. Are you sure you want to
-              proceed?
+              You selected Quantum Secure - OTP. This is extremely secure but slower.
+              Continue?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

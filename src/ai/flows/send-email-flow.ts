@@ -1,11 +1,10 @@
 'use server';
 /**
- * send-email-flow.ts — Resend version
+ * send-email-flow.ts — Resend version (attachments added)
  *
- * Replaces SendGrid with Resend (resend.com).
  * Uses:
- * - src/lib/pqc.ts for PQC encryption
- * - src/lib/firebase for Firestore
+ * - src/lib/pqc.ts for PQC encryption (encryptForRecipient)
+ * - firebase/firestore for storing encrypted message + attachments
  */
 
 import { ai } from '@/ai/genkit';
@@ -29,12 +28,19 @@ import { Resend } from 'resend';
 // --- Create Resend client (correct TS version) ---
 const resend = new Resend(process.env.RESEND_API_KEY || '');
 
+const AttachmentSchema = z.object({
+  name: z.string(),
+  contentB64: z.string(), // file bytes encoded as base64 from client
+  size: z.number().optional(),
+});
+
 const SendEmailInputSchema = z.object({
   to: z.string().email(),
   subject: z.string(),
   body: z.string(),
   securityLevel: z.string().optional(),
   securityKey: z.string().optional(),
+  attachments: z.array(AttachmentSchema).optional(),
 });
 
 export type SendEmailInput = z.infer<typeof SendEmailInputSchema>;
@@ -54,7 +60,7 @@ export async function sendEmail(input: SendEmailInput) {
 
 const sendEmailFlow = ai.defineFlow(
   {
-    name: 'sendEmailFlow_resend',
+    name: 'sendEmailFlow_resend_with_attachments',
     inputSchema: SendEmailInputSchema,
     outputSchema: z.object({
       success: z.boolean(),
@@ -103,20 +109,39 @@ const sendEmailFlow = ai.defineFlow(
         };
       }
 
-      // ---- PQC ENCRYPTION ----
-      const encryptedPayload = await encryptForRecipient(
-        input.body,
-        recipientPub
-      );
+      // ---- PQC ENCRYPTION for body ----
+      // Using encryptForRecipient (returns { kem, iv, ct })
+      const encryptedBody = await encryptForRecipient(input.body, recipientPub);
 
-      // ---- STORE ENCRYPTED MESSAGE ----
+      // ---- PQC ENCRYPTION for attachments (if any) ----
+      // attachments are expected to be provided as base64-encoded file bytes
+      const encryptedAttachments: Array<any> = [];
+      if (input.attachments && input.attachments.length > 0) {
+        for (const att of input.attachments) {
+          // att: { name, contentB64, size? }
+          // encrypt the contentB64 string (so plaintext is the base64 string)
+          const enc = await encryptForRecipient(att.contentB64, recipientPub);
+          encryptedAttachments.push({
+            filename: att.name,
+            size: att.size ?? null,
+            payload: {
+              kem: enc.kem,
+              iv: enc.iv,
+              ct: enc.ct,
+            },
+          });
+        }
+      }
+
+      // ---- STORE ENCRYPTED MESSAGE + ATTACHMENTS ----
       const messagesCol = collection(db, 'secureMessages');
       const docRef = await addDoc(messagesCol, {
         to: input.to,
         subject: input.subject,
         sender: process.env.RESEND_FROM_EMAIL,
         securityLevel: input.securityLevel || 'pqc',
-        payload: encryptedPayload,
+        payload: encryptedBody,
+        attachments: encryptedAttachments,
         createdAt: Date.now(),
       });
 
@@ -155,4 +180,3 @@ const sendEmailFlow = ai.defineFlow(
     }
   }
 );
-
