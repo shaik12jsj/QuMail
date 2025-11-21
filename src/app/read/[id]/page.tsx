@@ -17,7 +17,7 @@ export default function ReadPage() {
   const [decrypted, setDecrypted] = useState(false);
   const [decrypting, setDecrypting] = useState(false);
   const [decryptedMessage, setDecryptedMessage] = useState("");
-
+  const [decryptedAttachments, setDecryptedAttachments] = useState<any[]>([]);
 
   const db = getFirestore(app);
 
@@ -56,28 +56,31 @@ export default function ReadPage() {
   }
 
   const handleDecrypt = async () => {
-  setDecrypting(true);
+    setDecrypting(true);
 
-  try {
-    const res = await fetch("/api/decrypt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
+    try {
+      const res = await fetch("/api/decrypt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
 
-    setDecryptedMessage(data.plaintext);
-    setDecrypted(true);
-  } catch (err: any) {
-    alert("Decrypt failed: " + err.message);
-  } finally {
-    setDecrypting(false);
-  }
-};
+      // Decrypted text
+      setDecryptedMessage(data.plaintext);
 
+      // Decrypted attachments
+      setDecryptedAttachments(data.attachments || []);
 
+      setDecrypted(true);
+    } catch (err: any) {
+      alert("Decrypt failed: " + err.message);
+    } finally {
+      setDecrypting(false);
+    }
+  };
 
   return (
     <div className="flex h-screen w-full items-center justify-center p-4">
@@ -110,15 +113,34 @@ export default function ReadPage() {
               </Button>
             </div>
           ) : (
-            <div className="mt-6">
-  <h2 className="font-semibold mb-2 text-lg">Decrypted Message</h2>
+            <>
+              {/* Decrypted text */}
+              <div className="mt-6">
+                <h2 className="font-semibold mb-2 text-lg">Decrypted Message</h2>
 
-  <div className="rounded-md border bg-neutral-900 text-white p-4 whitespace-pre-wrap">
-    {decryptedMessage}
-  </div>
-</div>
+                <div className="rounded-md border bg-neutral-900 text-white p-4 whitespace-pre-wrap">
+                  {decryptedMessage}
+                </div>
+              </div>
 
+              {/* Attachments */}
+              {decryptedAttachments.length > 0 && (
+                <div className="mt-6 space-y-2">
+                  <h2 className="font-semibold text-lg">Attachments</h2>
 
+                  {decryptedAttachments.map((file, i) => (
+                    <a
+                      key={i}
+                      href={`data:application/octet-stream;base64,${file.contentB64}`}
+                      download={file.filename}
+                      className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Download {file.filename}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
