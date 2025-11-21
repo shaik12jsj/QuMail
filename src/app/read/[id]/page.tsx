@@ -113,10 +113,11 @@ export default function ReadPage() {
             <div className="mt-6">
   <h2 className="font-semibold mb-2 text-lg">Decrypted Message</h2>
 
-  <div className="rounded-md border bg-card p-4 text-card-foreground whitespace-pre-wrap">
+  <div className="rounded-md border bg-neutral-900 text-white p-4 whitespace-pre-wrap">
     {decryptedMessage}
   </div>
 </div>
+
 
           )}
         </CardContent>
