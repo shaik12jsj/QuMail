@@ -1,10 +1,6 @@
 'use server';
 /**
- * send-email-flow.ts — Resend version (attachments added)
- *
- * Uses:
- * - src/lib/pqc.ts for PQC encryption (encryptForRecipient)
- * - firebase/firestore for storing encrypted message + attachments
+ * send-email-flow.ts — Resend version (attachments + OTP checks)
  */
 
 import { ai } from '@/ai/genkit';
@@ -60,7 +56,7 @@ export async function sendEmail(input: SendEmailInput) {
 
 const sendEmailFlow = ai.defineFlow(
   {
-    name: 'sendEmailFlow_resend_with_attachments',
+    name: 'sendEmailFlow_resend_with_attachments_and_otp_check',
     inputSchema: SendEmailInputSchema,
     outputSchema: z.object({
       success: z.boolean(),
@@ -109,17 +105,21 @@ const sendEmailFlow = ai.defineFlow(
         };
       }
 
+      // ---- SERVER-SIDE: Disallow attachments for OTP mode ----
+      if (input.securityLevel === 'Quantum Secure - OTP' && input.attachments && input.attachments.length > 0) {
+        return {
+          success: false,
+          message: 'Quantum Secure - OTP does not support attachments. Remove attachments or choose another security level.',
+        };
+      }
+
       // ---- PQC ENCRYPTION for body ----
-      // Using encryptForRecipient (returns { kem, iv, ct })
       const encryptedBody = await encryptForRecipient(input.body, recipientPub);
 
       // ---- PQC ENCRYPTION for attachments (if any) ----
-      // attachments are expected to be provided as base64-encoded file bytes
       const encryptedAttachments: Array<any> = [];
       if (input.attachments && input.attachments.length > 0) {
         for (const att of input.attachments) {
-          // att: { name, contentB64, size? }
-          // encrypt the contentB64 string (so plaintext is the base64 string)
           const enc = await encryptForRecipient(att.contentB64, recipientPub);
           encryptedAttachments.push({
             filename: att.name,
@@ -145,10 +145,9 @@ const sendEmailFlow = ai.defineFlow(
         createdAt: Date.now(),
       });
 
-      // ---- READ LINK ----
+      // ---- READ LINK & send email ----
       const readUrl = `${baseUrl}/read/${docRef.id}`;
 
-      // ---- EMAIL HTML ----
       const emailHtml = `
         <p>You have received a <strong>secure message</strong>.</p>
         <p>Security: <strong>${input.securityLevel || 'PQC (Kyber)'}</strong></p>
@@ -162,7 +161,6 @@ const sendEmailFlow = ai.defineFlow(
         <p>If the button doesn't work, open: <br/> ${readUrl}</p>
       `;
 
-      // ---- SEND EMAIL ----
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL!,
         to: input.to,

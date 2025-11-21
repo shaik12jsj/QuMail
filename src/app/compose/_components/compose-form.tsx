@@ -1,3 +1,4 @@
+// (Full file with small edits — replace your current compose-form.tsx)
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -81,6 +82,7 @@ export function ComposeForm() {
 
   const recipient = form.watch('to');
   const messageContent = form.watch('body');
+  const securityLevel = form.watch('securityLevel');
 
   // Convert File → base64
   async function fileToBase64(file: File) {
@@ -124,7 +126,17 @@ export function ComposeForm() {
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     startTransition(async () => {
-      // Convert attachments → base64
+      // If OTP selected, attachments are not allowed
+      if (values.securityLevel === 'Quantum Secure - OTP' && attachments.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: 'OTP mode cannot include attachments',
+          description: 'Quantum Secure - OTP does not support attachments for security reasons. Remove attachments or choose another security level.',
+        });
+        return;
+      }
+
+      // Convert attachments → base64 for sending
       const encryptedAttachments = [];
       for (const a of attachments) {
         const contentB64 = await fileToBase64(a.file);
@@ -150,7 +162,7 @@ export function ComposeForm() {
         body: values.body,
         securityLevel: values.securityLevel,
         securityKey: keyResult.key,
-        attachments: encryptedAttachments,   // ⬅ NEW
+        attachments: encryptedAttachments,
       });
 
       if (result.success) {
@@ -186,15 +198,26 @@ export function ComposeForm() {
   };
 
   const handleFileAttach = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
-      const files = Array.from(event.target.files);
-      const newAttachments = files.map(file => ({
-        name: file.name,
-        size: file.size,
-        file,
-      }));
-      setAttachments(prev => [...prev, ...newAttachments]);
+    if (!event.target.files) return;
+
+    // If OTP selected, disallow attaching
+    const currentSec = form.getValues('securityLevel');
+    if (currentSec === 'Quantum Secure - OTP') {
+      toast({
+        variant: 'destructive',
+        title: 'Cannot attach files in OTP mode',
+        description: 'Quantum Secure - OTP does not support attachments.',
+      });
+      return;
     }
+
+    const files = Array.from(event.target.files);
+    const newAttachments = files.map(file => ({
+      name: file.name,
+      size: file.size,
+      file,
+    }));
+    setAttachments(prev => [...prev, ...newAttachments]);
   };
 
   const handleRemoveAttachment = (name: string) => {
@@ -205,8 +228,6 @@ export function ComposeForm() {
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-
-          {/* standard fields */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <FormField
               control={form.control}
@@ -221,7 +242,6 @@ export function ComposeForm() {
                 </FormItem>
               )}
             />
-
             <FormField
               control={form.control}
               name="subject"
@@ -236,7 +256,6 @@ export function ComposeForm() {
               )}
             />
           </div>
-
           <FormField
             control={form.control}
             name="body"
@@ -255,41 +274,82 @@ export function ComposeForm() {
             )}
           />
 
-          {/* Attachments */}
+          <div className="space-y-4 rounded-lg border bg-secondary/50 p-4">
+            <FormField
+              control={form.control}
+              name="securityLevel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Security Level</FormLabel>
+                  <div className="flex items-center gap-4">
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a security level" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Quantum Secure - OTP">
+                          Quantum Secure - OTP
+                        </SelectItem>
+                        <SelectItem value="Quantum-aided AES">
+                          Quantum-aided AES
+                        </SelectItem>
+                        <SelectItem value="PQC">PQC</SelectItem>
+                        <SelectItem value="No Quantum security">
+                          No Quantum security
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {isGuidanceLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Getting guidance...</span>
+              </div>
+            ) : guidance ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-accent" />
+                {guidance}
+              </p>
+            ) : null}
+          </div>
+          
           <div className="space-y-2">
             <FormLabel>Attachments</FormLabel>
             <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" size="sm" asChild>
-                <label htmlFor="file-upload">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                asChild
+                disabled={securityLevel === 'Quantum Secure - OTP'} // disable button visually
+              >
+                <label htmlFor="file-upload" className={securityLevel === 'Quantum Secure - OTP' ? 'opacity-50 cursor-not-allowed' : ''}>
                   <Paperclip className="mr-2 h-4 w-4" />
                   Attach Files
                 </label>
               </Button>
               <input id="file-upload" type="file" multiple className="hidden" onChange={handleFileAttach} />
             </div>
-
+            {securityLevel === 'Quantum Secure - OTP' && (
+              <p className="text-sm text-muted-foreground">Attachments are disabled for OTP mode.</p>
+            )}
             {attachments.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {attachments.map((file, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between rounded-md border p-2 text-sm"
-                  >
-                    <span>
-                      {file.name} ({(file.size / 1024).toFixed(2)} KB)
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleRemoveAttachment(file.name)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                <div className="mt-2 space-y-2">
+                    {attachments.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                            <span>{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemoveAttachment(file.name)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
             )}
           </div>
 
@@ -306,8 +366,6 @@ export function ComposeForm() {
         </form>
       </Form>
 
-
-      {/* Security Confirmation Dialog */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -328,3 +386,4 @@ export function ComposeForm() {
     </>
   );
 }
+
