@@ -1,13 +1,13 @@
 'use server';
+
 /**
- * Gmail-Safe send-email-flow (Option A subject)
+ * FINAL Gmail-Safe send-email-flow (Option A)
  * - PQC encryption for body + attachments
- * - Attachments supported (encrypted per-file)
+ * - Attachments supported (encrypted)
  * - OTP mode forbids attachments
- * - Forced base URL (use NEXT_PUBLIC_BASE_URL)
- * - Safe FROM (use RESEND_FROM_EMAIL; avoid "no-reply")
- * - Minimal, human-like email content (Option A subject)
- * - No tracking, no buttons styling that triggers filters
+ * - Uses Vercel URL (Option A)
+ * - Safe FROM (mail@qumail.dpdns.org)
+ * - Minimal plain wording (Gmail friendly)
  */
 
 import { ai } from '@/ai/genkit';
@@ -30,7 +30,7 @@ const resend = new Resend(process.env.RESEND_API_KEY || '');
 
 const AttachmentSchema = z.object({
   name: z.string(),
-  contentB64: z.string(), // base64 file bytes from client
+  contentB64: z.string(),
   size: z.number().optional(),
 });
 
@@ -47,7 +47,6 @@ export type SendEmailInput = z.infer<typeof SendEmailInputSchema>;
 
 if (!process.env.RESEND_API_KEY) console.error('❌ RESEND_API_KEY missing');
 if (!process.env.RESEND_FROM_EMAIL) console.error('❌ RESEND_FROM_EMAIL missing');
-if (!process.env.NEXT_PUBLIC_BASE_URL) console.warn('⚠️ NEXT_PUBLIC_BASE_URL missing — fallback will be used');
 
 export async function sendEmail(input: SendEmailInput) {
   return sendEmailFlow(input);
@@ -55,48 +54,52 @@ export async function sendEmail(input: SendEmailInput) {
 
 const sendEmailFlow = ai.defineFlow(
   {
-    name: 'sendEmailFlow_gmail_safe_optionA',
+    name: 'sendEmailFlow_gmail_safe_final',
     inputSchema: SendEmailInputSchema,
     outputSchema: z.object({
       success: z.boolean(),
       message: z.string(),
     }),
   },
+
   async (input) => {
     try {
-      // ---------- Force baseUrl to the verified domain ----------
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://qumail.dpdns.org';
+      // -------- BASE URL (Option A) --------
+      const baseUrl = 'https://qu-mail-taupe.vercel.app';
 
-      // ---------- Load recipient public key ----------
+      // -------- Find recipient --------
       const db = getFirestore(app);
       const usersCol = collection(db, 'users');
       const q = query(usersCol, where('email', '==', input.to));
       const snap = await getDocs(q);
+
       if (snap.empty) {
         return { success: false, message: 'Recipient not registered in QuMail.' };
       }
+
       const recipientData = snap.docs[0].data() as any;
       const recipientPub = recipientData?.pubkeys?.kyberPublic;
+
       if (!recipientPub) {
-        return { success: false, message: 'Recipient has no PQC public key.' };
+        return { success: false, message: 'Recipient missing PQC public key.' };
       }
 
-      // ---------- OTP mode forbids attachments ----------
-      if (input.securityLevel === 'Quantum Secure - OTP' && input.attachments && input.attachments.length > 0) {
+      // -------- OTP mode -> no attachments --------
+      if (input.securityLevel === 'Quantum Secure - OTP' && input.attachments?.length) {
         return {
           success: false,
           message: 'Quantum Secure - OTP does not support attachments.',
         };
       }
 
-      // ---------- Encrypt body ----------
+      // -------- Encrypt body --------
       const encryptedBody = await encryptForRecipient(input.body, recipientPub);
 
-      // ---------- Encrypt attachments ----------
-      const encryptedAttachments: Array<any> = [];
-      if (input.attachments && input.attachments.length > 0) {
+      // -------- Encrypt attachments --------
+      const encryptedAttachments: any[] = [];
+
+      if (input.attachments?.length) {
         for (const att of input.attachments) {
-          // We encrypt the base64 bytes string for the recipient as plain text payload
           const enc = await encryptForRecipient(att.contentB64, recipientPub);
           encryptedAttachments.push({
             filename: att.name,
@@ -110,11 +113,9 @@ const sendEmailFlow = ai.defineFlow(
         }
       }
 
-      // ---------- Store encrypted message & attachments ----------
-      const messagesCol = collection(db, 'secureMessages');
-      const docRef = await addDoc(messagesCol, {
+      // -------- Save message --------
+      const docRef = await addDoc(collection(db, 'secureMessages'), {
         to: input.to,
-        // store original subject for user display but we will override outgoing subject for deliverability
         originalSubject: input.subject,
         sender: process.env.RESEND_FROM_EMAIL,
         securityLevel: input.securityLevel || 'PQC',
@@ -125,11 +126,10 @@ const sendEmailFlow = ai.defineFlow(
 
       const readUrl = `${baseUrl}/read/${docRef.id}`;
 
-      // ---------- Gmail-safe subject (Option A) ----------
-      // We override subject for outbound email to maximize deliverability.
-      const outboundSubject = 'Hi, I wanted to share something';
+      // -------- Gmail-safe subject / Option A --------
+      const gmailSafeSubject = 'Hi, I wanted to share something';
 
-      // ---------- Minimal, human-like html + text ----------
+      // -------- Gmail-safe HTML --------
       const html = `
         <p>Hi,</p>
         <p>I wanted to share something with you. Please open the link below:</p>
@@ -138,6 +138,7 @@ const sendEmailFlow = ai.defineFlow(
         <p>Thanks.</p>
       `.trim();
 
+      // -------- Plain text backup --------
       const text = `Hi,
 
 I wanted to share something with you. Please open the link below:
@@ -148,20 +149,23 @@ If the link doesn't open, copy and paste it into your browser.
 
 Thanks.`;
 
-      // ---------- Send email (no tracking, minimal headers) ----------
+      // -------- Send via Resend --------
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL!,
         to: input.to,
-        subject: outboundSubject,
+        subject: gmailSafeSubject,
         html,
         text,
-        // no tracking flags — keep payload minimal
       });
 
-      return { success: true, message: 'Message saved and notification sent.' };
+      return { success: true, message: 'Message saved & email sent.' };
+
     } catch (err: any) {
-      console.error('❌ sendEmailFlow error:', err);
-      return { success: false, message: err?.message || 'Failed to send secure email.' };
+      console.error('❌ sendEmailFlow error', err);
+      return {
+        success: false,
+        message: err?.message || 'Email send failed.',
+      };
     }
   }
 );
