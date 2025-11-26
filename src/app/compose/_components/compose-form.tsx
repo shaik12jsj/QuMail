@@ -45,10 +45,12 @@ import { useToast } from '@/hooks/use-toast';
 import { type GenerateSecurityKeyOutput } from '@/ai/flows/generate-security-key-flow';
 
 const formSchema = z.object({
-  to: z.string().regex(
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    { message: "Invalid email address." }
-  ),
+  to: z
+  .string()
+  .trim()
+  .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, {
+    message: "Invalid email address.",
+  }),
 
   cc: z.string().optional(),
   bcc: z.string().optional(),
